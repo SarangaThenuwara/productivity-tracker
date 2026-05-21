@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Outright BPO — Productivity Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library/2.38.0/msal-browser.min.js"></script>
+<script>
+  if (typeof msal === 'undefined') {
+    document.write('<script src="/msal-browser.min.js"><\/script>');
+  }
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg:        #0a0d12;
+    --surface:   #111620;
+    --card:      #161d2b;
+    --border:    #1e2a3d;
+    --accent:    #00c2ff;
+    --accent2:   #7b5cf5;
+    --green:     #00e5a0;
+    --orange:    #ff8a00;
+    --red:       #ff4d6d;
+    --text:      #e8edf5;
+    --muted:     #5a6880;
+    --mono:      'DM Mono', monospace;
+    --sans:      'Sora', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── NOISE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 9999; opacity: .4;
+  }
+
+  /* ── GLOW BLOBS ── */
+  .blob {
+    position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0;
+  }
+  .blob-1 { width: 500px; height: 500px; background: rgba(0,194,255,.06); top:-100px; left:-100px; }
+  .blob-2 { width: 400px; height: 400px; background: rgba(123,92,245,.05); bottom:0; right:-100px; }
+
+  /* ── SCREENS ── */
+  .screen { display: none; position: relative; z-index: 1; }
+  .screen.active { display: block; }
+
+  /* ── LOGIN SCREEN ── */
+  #screen-login {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+  }
+  #screen-login.active { display: flex; }
+
+  .login-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 48px 40px;
+    width: 100%; max-width: 420px;
+    text-align: center;
+    box-shadow: 0 0 80px rgba(0,194,255,.06);
+    animation: fadeUp .5s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(20px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  .logo-mark {
+    display: inline-flex; align-items: center; gap: 10px;
+    margin-bottom: 32px;
+  }
+  .logo-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .logo-text { font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+  .logo-text span { color: var(--accent); }
+
+  .login-title { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
+  .login-sub { color: var(--muted); font-size: 14px; margin-bottom: 36px; }
+
+  .btn-ms {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), #0090cc);
+    border: none; border-radius: 12px;
+    color: #fff; font-family: var(--sans); font-size: 15px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+    transition: opacity .2s, transform .15s;
+  }
+  .btn-ms:hover { opacity: .9; transform: translateY(-1px); }
+  .btn-ms:active { transform: translateY(0); }
+
+  .login-note { margin-top: 20px; font-size: 12px; color: var(--muted); }
+
+  /* ── MAIN APP ── */
+  #screen-app { min-height: 100vh; display: flex; flex-direction: column; }
+  #screen-app.active { display: flex; }
+
+  /* TOP BAR */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; height: 60px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 14px; }
+  .topbar-brand { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .topbar-brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+  .staff-pill {
+    background: var(--card); border: 1px solid var(--border); border-radius: 20px;
+    padding: 4px 14px 4px 6px;
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+  }
+  .staff-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .shift-badge {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 12px; font-family: var(--mono); font-size: 12px; color: var(--muted);
+  }
+  .shift-badge span { color: var(--accent); }
+
+  .btn-logout {
+    background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 12px; color: var(--muted); font-size: 12px; cursor: pointer;
+    font-family: var(--sans); transition: border-color .2s, color .2s;
+  }
+  .btn-logout:hover { border-color: var(--red); color: var(--red); }
+
+  /* BODY LAYOUT */
+  .app-body {
+    flex: 1; display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 0;
+    padding: 28px;
+    max-width: 1400px; margin: 0 auto; width: 100%;
+  }
+
+  /* LEFT PANEL */
+  .left-panel { padding-right: 24px; }
+
+  .clock-widget {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 24px; margin-bottom: 20px; text-align: center;
+  }
+  .clock-time {
+    font-family: var(--mono); font-size: 38px; font-weight: 500;
+    color: var(--accent); letter-spacing: 2px;
+    text-shadow: 0 0 30px rgba(0,194,255,.3);
+  }
+  .clock-date { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 14px;
+  }
+  .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px; }
+  .stat-val { font-family: var(--mono); font-size: 22px; font-weight: 500; }
+  .stat-val.green { color: var(--green); }
+  .stat-val.orange { color: var(--orange); }
+  .stat-val.accent { color: var(--accent); }
+  .stat-val.red { color: var(--red); }
+
+  /* TASK FORM PANEL */
+  .panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 22px; margin-bottom: 16px;
+  }
+  .panel-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--muted); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-title::after { content:''; flex:1; height:1px; background: var(--border); }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .8px; }
+  .field input, .field select, .field textarea {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 12px;
+    color: var(--text); font-family: var(--sans); font-size: 13px;
+    outline: none; transition: border-color .2s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
+  .field select option { background: var(--surface); }
+  .field textarea { resize: vertical; min-height: 60px; }
+
+  .btn-primary {
+    width: 100%; padding: 13px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; font-family: var(--sans); font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: opacity .2s, transform .15s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-primary:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+
+  .btn-secondary {
+    padding: 11px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); color: var(--text);
+    font-family: var(--sans); font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: border-color .2s, background .2s;
+  }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--accent); background: rgba(0,194,255,.05); }
+  .btn-secondary:disabled { opacity: .35; cursor: not-allowed; }
+  .btn-secondary.danger:hover:not(:disabled) { border-color: var(--red); background: rgba(255,77,109,.05); color: var(--red); }
+
+  /* ACTIVE TASK INDICATOR */
+  .active-task-bar {
+    display: none;
+    background: linear-gradient(90deg, rgba(0,194,255,.1), rgba(123,92,245,.1));
+    border: 1px solid rgba(0,194,255,.25);
+    border-radius: 12px; padding: 14px 18px;
+    margin-bottom: 16px;
+    animation: fadeUp .3s ease both;
+  }
+  .active-task-bar.show { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .active-task-name { font-size: 13px; font-weight: 600; color: var(--accent); }
+  .active-task-timer { font-family: var(--mono); font-size: 18px; font-weight: 500; color: var(--green); }
+  .active-task-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* RIGHT PANEL — LOG */
+  .right-panel { }
+
+  .log-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .log-title { font-size: 18px; font-weight: 700; }
+  .log-sub { font-size: 12px; color: var(--muted); }
+  .log-filter { display: flex; gap: 8px; }
+  .filter-btn {
+    padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    cursor: pointer; transition: all .2s; font-family: var(--sans);
+  }
+  .filter-btn.active, .filter-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,194,255,.07); }
+
+  .log-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .log-entry {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 20px; display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 14px; align-items: center;
+    animation: fadeUp .3s ease both;
+    transition: border-color .2s;
+  }
+  .log-entry:hover { border-color: rgba(0,194,255,.2); }
+  .log-entry.active-entry { border-color: rgba(0,194,255,.3); background: rgba(0,194,255,.03); }
+  .log-entry.break-entry { border-color: rgba(255,138,0,.2); background: rgba(255,138,0,.02); }
+
+  .entry-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+    flex-shrink: 0;
+  }
+  .entry-icon.productive { background: rgba(0,229,160,.1); }
+  .entry-icon.break      { background: rgba(255,138,0,.1); }
+  .entry-icon.internal   { background: rgba(123,92,245,.1); }
+
+  .entry-body { min-width: 0; }
+  .entry-task { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .entry-meta { font-size: 11px; color: var(--muted); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .entry-meta span { display: flex; align-items: center; gap: 4px; }
+
+  .entry-right { text-align: right; flex-shrink: 0; }
+  .entry-duration { font-family: var(--mono); font-size: 15px; font-weight: 500; }
+  .entry-status {
+    display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .8px; padding: 2px 8px; border-radius: 6px; margin-top: 4px;
+  }
+  .entry-status.Active   { background: rgba(0,194,255,.1); color: var(--accent); }
+  .entry-status.Completed{ background: rgba(0,229,160,.1); color: var(--green); }
+  .entry-status.Paused   { background: rgba(255,138,0,.1); color: var(--orange); }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--muted);
+    width: 100%;
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: .4; }
+  .empty-text { font-size: 14px; }
+
+  /* TOAST */
+  #toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 20px;
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 8px 40px rgba(0,0,0,.4);
+    z-index: 9998; transform: translateY(20px); opacity: 0;
+    transition: all .3s; max-width: 320px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: rgba(0,229,160,.3); }
+  #toast.error   { border-color: rgba(255,77,109,.3); }
+
+  /* BREAK OVERLAY */
+  #break-overlay {
+    display: none; position: fixed; inset: 0; z-index: 500;
+    background: rgba(10,13,18,.92); backdrop-filter: blur(12px);
+    align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+  }
+  #break-overlay.show { display: flex; }
+  .break-banner {
+    background: var(--card); border: 1px solid rgba(255,138,0,.3);
+    border-radius: 20px; padding: 40px 48px; text-align: center;
+    max-width: 400px; width: 100%;
+  }
+  .break-icon { font-size: 48px; margin-bottom: 16px; }
+  .break-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .break-type-label { color: var(--orange); font-size: 14px; margin-bottom: 24px; }
+  .break-timer { font-family: var(--mono); font-size: 48px; font-weight: 500; color: var(--orange); margin-bottom: 24px; text-shadow: 0 0 30px rgba(255,138,0,.3); }
+  .btn-end-break {
+    padding: 13px 32px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, var(--orange), #cc6600);
+    color: #fff; font-family: var(--sans); font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: opacity .2s;
+  }
+  .btn-end-break:hover { opacity: .85; }
+
+  /* LOADING */
+  #loading-overlay {
+    display: none; position: fixed; inset: 0; z-index: 9000;
+    background: var(--bg); align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+  }
+  #loading-overlay.show { display: flex; }
+  .spinner {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 14px; color: var(--muted); }
+
+  /* SHIFT WARNINGS */
+  .out-of-shift-banner {
+    display: none;
+    background: rgba(255,77,109,.08); border: 1px solid rgba(255,77,109,.3);
+    border-radius: 10px; padding: 10px 16px; font-size: 12px; color: var(--red);
+    margin-bottom: 14px; align-items: center; gap: 8px;
+  }
+  .out-of-shift-banner.show { display: flex; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    .app-body { grid-template-columns: 1fr; }
+    .left-panel { padding-right: 0; margin-bottom: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- BLOBS -->
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Signing you in…</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- BREAK OVERLAY -->
+<div id="break-overlay">
+  <div class="break-banner">
+    <div class="break-icon">☕</div>
+    <div class="break-title">On Break</div>
+    <div class="break-type-label" id="break-type-display">Lunch Break</div>
+    <div class="break-timer" id="break-timer-display">00:00</div>
+    <button class="btn-end-break" onclick="endBreak()">End Break &amp; Resume Work</button>
+  </div>
+</div>
+
+<!-- ──────────────── LOGIN SCREEN ──────────────── -->
+<div id="screen-login" class="screen active">
+  <div class="login-box">
+    <div class="logo-mark">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-text">Outright <span>BPO</span></div>
+    </div>
+    <div class="login-title">Productivity Tracker</div>
+    <div class="login-sub">Sign in with your Microsoft 365 account to begin your shift</div>
+    <button class="btn-ms" onclick="signIn()">
+      <svg width="18" height="18" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+        <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+        <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+        <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+      </svg>
+      Sign in with Microsoft
+    </button>
+    <div class="login-note">🔒 Your data is logged securely to SharePoint. Only managers can view your history.</div>
+  </div>
+</div>
+
+<!-- ──────────────── MAIN APP SCREEN ──────────────── -->
+<div id="screen-app" class="screen">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-brand">
+        <div class="dot"></div>
+        Outright Productivity Tracker
+      </div>
+      <div class="staff-pill">
+        <div class="staff-avatar" id="avatar-initials">?</div>
+        <span id="topbar-name">Loading…</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="shift-badge">Shift: <span id="shift-label">—</span></div>
+      <div class="shift-badge">Client: <span id="client-label">—</span></div>
+      <button class="btn-logout" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="app-body">
+
+    <!-- LEFT PANEL -->
+    <div class="left-panel">
+
+      <!-- CLOCK -->
+      <div class="clock-widget">
+        <div class="clock-time" id="clock-time">00:00:00</div>
+        <div class="clock-date" id="clock-date">—</div>
+      </div>
+
+      <!-- OUT OF SHIFT WARNING -->
+      <div class="out-of-shift-banner" id="oos-banner">
+        ⚠️ You are currently outside your scheduled shift hours. Tasks will be flagged as Out-of-Shift.
+      </div>
+
+      <!-- STATS -->
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Productive</div>
+          <div class="stat-val green" id="stat-productive">0m</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Break Used</div>
+          <div class="stat-val orange" id="stat-break">0m</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Tasks Done</div>
+          <div class="stat-val accent" id="stat-tasks">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pings Missed</div>
+          <div class="stat-val red" id="stat-pings">0</div>
+        </div>
+      </div>
+
+      <!-- ACTIVE TASK BAR -->
+      <div class="active-task-bar" id="active-task-bar">
+        <div>
+          <div class="active-task-name" id="active-task-name">—</div>
+          <div class="active-task-meta" id="active-task-meta">—</div>
+        </div>
+        <div class="active-task-timer" id="active-task-timer">00:00</div>
+      </div>
+
+      <!-- TASK FORM -->
+      <div class="panel">
+        <div class="panel-title">Log New Task</div>
+
+        <div class="field">
+          <label>Task Name</label>
+          <input type="text" id="input-task" placeholder="e.g. Email responses, Data entry…"/>
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <select id="input-category">
+            <option value="Productive">Productive</option>
+            <option value="Internal">Internal</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Notes (optional)</label>
+          <textarea id="input-notes" placeholder="Any additional context…"></textarea>
+        </div>
+
+        <button class="btn-primary" id="btn-start" onclick="startTask()">
+          ▶ Start Task
+        </button>
+      </div>
+
+      <!-- CONTROL BUTTONS -->
+      <div class="btn-row">
+        <button class="btn-secondary" id="btn-pause" onclick="pauseTask()" disabled>⏸ Pause</button>
+        <button class="btn-secondary" id="btn-resume" onclick="resumeTask()" disabled>▶ Resume</button>
+      </div>
+      <button class="btn-secondary danger" id="btn-complete" onclick="completeTask()" disabled style="width:100%;margin-bottom:10px;">
+        ✓ Complete Task
+      </button>
+
+      <!-- BREAK PANEL -->
+      <div class="panel">
+        <div class="panel-title">Take a Break</div>
+        <div class="field">
+          <label>Break Type</label>
+          <select id="input-break-type">
+            <option value="Lunch">Lunch</option>
+            <option value="Breakfast">Breakfast</option>
+            <option value="Toilet">Toilet</option>
+            <option value="Short Break">Short Break</option>
+          </select>
+        </div>
+        <button class="btn-secondary" id="btn-break" onclick="startBreak()" style="width:100%;">
+          ☕ Start Break
+        </button>
+      </div>
+
+      <!-- MISSED PING -->
+      <div class="panel">
+        <div class="panel-title">Log Missed Ping</div>
+        <button class="btn-secondary danger" onclick="logMissedPing()" style="width:100%;">
+          🔔 I Missed a Ping
+        </button>
+      </div>
+
+    </div><!-- /left -->
+
+    <!-- RIGHT PANEL -->
+    <div class="right-panel">
+      <div class="log-header">
+        <div>
+          <div class="log-title">Today's Activity Log</div>
+          <div class="log-sub" id="log-sub-date">—</div>
+        </div>
+        <div class="log-filter">
+          <button class="filter-btn active" onclick="filterLog('all', this)">All</button>
+          <button class="filter-btn" onclick="filterLog('Productive', this)">Productive</button>
+          <button class="filter-btn" onclick="filterLog('Break', this)">Breaks</button>
+          <button class="filter-btn" onclick="filterLog('Internal', this)">Internal</button>
+        </div>
+      </div>
+
+      <div class="log-list" id="log-list">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <div class="empty-text">No tasks logged yet. Start your first task above.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /app-body -->
+</div><!-- /screen-app -->
+
+<script>
+// ═══════════════════════════════════════════════
+//  CONFIGURATION — Loaded dynamically from secure environment
+// ═══════════════════════════════════════════════
+let CONFIG = null;
+let msalInstance = null;
+const loginScopes = ["User.Read", "Sites.ReadWrite.All"];
+
+// Operational Shifts configurations
+const SHIFTS = {
+  morning:   { start: "07:00", end: "15:00", label: "Morning (7am–3pm)" },
+  afternoon: { start: "15:00", end: "23:00", label: "Afternoon (3pm–11pm)" },
+  night:     { start: "23:00", end: "07:00", label: "Night (11pm–7am)" },
+};
+
+let currentUser    = null;   // staff record loaded from server
+let currentAccount = null;   // MSAL account
+let accessToken    = null;
+
+// ── active task state ──
+let activeTask = null;    // { id, name, category, startTime, status, itemId }
+let activeBreak = null;   // { type, startTime, itemId }
+let taskTimerInterval = null;
+let breakTimerInterval = null;
+let todayLogs = [];
+let filterMode = "all";
+let totalProductiveMs = 0;
+let totalBreakMs = 0;
+let totalTasks = 0;
+let totalPingsMissed = 0;
+
+// ── load configuration asynchronously ──
+async function loadAppConfig() {
+  try {
+    const res = await fetch("/api/config");
+    if (!res.ok) throw new Error("Could not fetch system settings from the server.");
+    const data = await res.json();
+    CONFIG = {
+      clientId:        data.clientId,
+      tenantId:        data.tenantId,
+      redirectUri:     window.location.origin,
+      sharePointHost:  data.sharePointHost,
+      sharePointSite:  data.sharePointSite,
+      listName:        data.listName
+    };
+
+    const msalConfig = {
+      auth: {
+        clientId: CONFIG.clientId,
+        authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`,
+        redirectUri: CONFIG.redirectUri,
+      },
+      cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false },
+    };
+
+    msalInstance = new msal.PublicClientApplication(msalConfig);
+  } catch(e) {
+    console.error("Configuration error:", e);
+    showToast("❌ System initialization failed: " + e.message, "error");
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════════
+async function signIn() {
+  if (!msalInstance) {
+    showToast("❌ Authentication manager is not ready. Please try again.", "error");
+    return;
+  }
+  try {
+    await msalInstance.handleRedirectPromise();
+    const result = await msalInstance.loginPopup({ scopes: loginScopes });
+    currentAccount = result.account;
+    await initUser(result.account.username);
+  } catch(e) {
+    showToast("❌ Sign-in failed: " + e.message, "error");
+  }
+}
+
+async function initUser(email) {
+  showLoading(true);
+  try {
+    const res = await fetch(`/api/user?email=${encodeURIComponent(email)}`);
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || "Account not registered");
+    }
+    const staff = await res.json();
+    currentUser = staff;
+    accessToken = await getToken();
+
+    // populate UI
+    document.getElementById("topbar-name").textContent = staff.name;
+    document.getElementById("avatar-initials").textContent = staff.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+    const shift = SHIFTS[staff.shift] || { label: staff.shift };
+    document.getElementById("shift-label").textContent = shift.label;
+    document.getElementById("client-label").textContent = staff.client;
+
+    showLoading(false);
+    showScreen("app");
+    startClock();
+    checkShiftStatus();
+    setInterval(checkShiftStatus, 60000);
+    
+    // Load today's history and active state from SharePoint (Stateful restoration!)
+    await fetchTodayLogs();
+  } catch(e) {
+    showLoading(false);
+    showToast("❌ " + e.message + ". Contact your manager.", "error");
+    if (msalInstance) {
+      msalInstance.logout();
+    }
+  }
+}
+
+async function getToken() {
+  if (!msalInstance) throw new Error("Authentication manager is not initialized");
+  try {
+    const result = await msalInstance.acquireTokenSilent({
+      scopes: loginScopes,
+      account: currentAccount,
+    });
+    return result.accessToken;
+  } catch {
+    const result = await msalInstance.acquireTokenPopup({ scopes: loginScopes });
+    return result.accessToken;
+  }
+}
+
+function signOut() {
+  if (activeTask || activeBreak) {
+    if (!confirm("You have an active task or break. Sign out anyway?")) return;
+  }
+  clearInterval(taskTimerInterval);
+  clearInterval(breakTimerInterval);
+  if (msalInstance) {
+    msalInstance.logout();
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  CLOCK & SHIFT CHECK
+// ═══════════════════════════════════════════════
+function startClock() {
+  const tick = () => {
+    const now = new Date();
+    document.getElementById("clock-time").textContent =
+      now.toLocaleTimeString("en-US", { hour12: false });
+    document.getElementById("clock-date").textContent =
+      now.toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric", year:"numeric" });
+    document.getElementById("log-sub-date").textContent =
+      now.toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric", year:"numeric" });
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
+function checkShiftStatus() {
+  if (!currentUser) return;
+  const shift = SHIFTS[currentUser.shift];
+  if (!shift) return;
+  const now = new Date();
+  const [sh, sm] = shift.start.split(":").map(Number);
+  const [eh, em] = shift.end.split(":").map(Number);
+  const startMins = sh * 60 + sm;
+  const endMins   = eh * 60 + em;
+  const nowMins   = now.getHours() * 60 + now.getMinutes();
+  let inShift;
+  if (startMins < endMins) {
+    inShift = nowMins >= startMins && nowMins < endMins;
+  } else {
+    // overnight shift
+    inShift = nowMins >= startMins || nowMins < endMins;
+  }
+  document.getElementById("oos-banner").classList.toggle("show", !inShift);
+}
+
+function isOutOfShift() {
+  if (!currentUser) return false;
+  const shift = SHIFTS[currentUser.shift];
+  if (!shift) return false;
+  const now = new Date();
+  const [sh, sm] = shift.start.split(":").map(Number);
+  const [eh, em] = shift.end.split(":").map(Number);
+  const startMins = sh * 60 + sm;
+  const endMins   = eh * 60 + em;
+  const nowMins   = now.getHours() * 60 + now.getMinutes();
+  if (startMins < endMins) return !(nowMins >= startMins && nowMins < endMins);
+  return !(nowMins >= startMins || nowMins < endMins);
+}
+
+// ═══════════════════════════════════════════════
+//  SHAREPOINT API
+// ═══════════════════════════════════════════════
+function spBase() {
+  return `https://graph.microsoft.com/v1.0/sites/${CONFIG.sharePointHost}:/sites/${CONFIG.sharePointSite}:/lists/${CONFIG.listName}/items`;
+}
+
+async function spPost(fields) {
+  accessToken = await getToken();
+  const res = await fetch(spBase(), {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + accessToken,
+      "Content-Type":  "application/json",
+    },
+    body: JSON.stringify({ fields }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function spPatch(itemId, fields) {
+  accessToken = await getToken();
+  const res = await fetch(spBase() + `/${itemId}/fields`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": "Bearer " + accessToken,
+      "Content-Type":  "application/json",
+    },
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ═══════════════════════════════════════════════
+//  TASK LOGIC
+// ═══════════════════════════════════════════════
+async function startTask() {
+  if (activeTask) { showToast("⚠️ Complete or pause current task first.", "error"); return; }
+  if (activeBreak){ showToast("⚠️ End your break first.", "error"); return; }
+
+  const name = document.getElementById("input-task").value.trim();
+  const category = document.getElementById("input-category").value;
+  const notes = document.getElementById("input-notes").value.trim();
+
+  if (!name) { showToast("⚠️ Enter a task name.", "error"); return; }
+
+  const now = new Date();
+  const fields = {
+    StaffEmail:    currentUser.email,
+    StaffName:     currentUser.name,
+    Department:    currentUser.department,
+    StaffRole:     currentUser.role,
+    Client:        currentUser.client,
+    TaskName:      name,
+    Category:      category,
+    TaskStartTime: now.toISOString(),
+    IsBreak:       false,
+    CountsToLimit: true,
+    PingsMissed:   totalPingsMissed,
+    TaskStatus:    "Active",
+    OutOfShift:    isOutOfShift(),
+    WorkDate:      now.toISOString(),
+    Notes:         notes,
+  };
+
+  document.getElementById("btn-start").disabled = true;
+  try {
+    const item = await spPost(fields);
+    activeTask = { id: item.id, name, category, startTime: now, status: "Active", itemId: item.id, notes };
+    document.getElementById("input-task").value = "";
+    document.getElementById("input-notes").value = "";
+    updateActiveTaskBar();
+    startTaskTimer();
+    setTaskButtons(true);
+    addLogEntry({ ...activeTask, taskStartTime: now, taskStatus: "Active" });
+    showToast("▶ Task started: " + name, "success");
+    totalTasks++;
+    updateStats();
+  } catch(e) {
+    showToast("❌ Failed to log task: " + e.message, "error");
+  }
+  document.getElementById("btn-start").disabled = false;
+}
+
+async function pauseTask() {
+  if (!activeTask || activeTask.status !== "Active") return;
+  const now = new Date();
+  const elapsed = Math.round((now - activeTask.startTime) / 60000);
+  try {
+    await spPatch(activeTask.itemId, { TaskStatus: "Paused" });
+    activeTask.status = "Paused";
+    clearInterval(taskTimerInterval);
+    updateActiveTaskBar();
+    updateLogEntry(activeTask.itemId, { taskStatus: "Paused", durationMinutes: elapsed });
+    setTaskButtons(true);
+    showToast("⏸ Task paused.", "success");
+  } catch(e) {
+    showToast("❌ Error: " + e.message, "error");
+  }
+}
+
+async function resumeTask() {
+  if (!activeTask || activeTask.status !== "Paused") return;
+  const now = new Date();
+  try {
+    await spPatch(activeTask.itemId, { TaskStatus: "Active", ResumedAt: now.toISOString() });
+    activeTask.status = "Active";
+    activeTask.startTime = now; // reset timer from resume
+    startTaskTimer();
+    updateActiveTaskBar();
+    updateLogEntry(activeTask.itemId, { taskStatus: "Active" });
+    setTaskButtons(true);
+    showToast("▶ Task resumed.", "success");
+  } catch(e) {
+    showToast("❌ Error: " + e.message, "error");
+  }
+}
+
+async function completeTask() {
+  if (!activeTask) return;
+  const now = new Date();
+  const elapsed = Math.round((now - activeTask.startTime) / 60000);
+  try {
+    await spPatch(activeTask.itemId, {
+      TaskStatus:     "Completed",
+      TaskEndTime:    now.toISOString(),
+      DurationMinutes: elapsed,
+    });
+    clearInterval(taskTimerInterval);
+    totalProductiveMs += (now - activeTask.startTime);
+    updateLogEntry(activeTask.itemId, {
+      taskStatus: "Completed", taskEndTime: now, durationMinutes: elapsed
+    });
+    showToast("✓ Task completed! (" + elapsed + " min)", "success");
+    activeTask = null;
+    updateActiveTaskBar();
+    setTaskButtons(false);
+    updateStats();
+  } catch(e) {
+    showToast("❌ Error: " + e.message, "error");
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  BREAK LOGIC
+// ═══════════════════════════════════════════════
+async function startBreak() {
+  if (activeTask && activeTask.status === "Active") {
+    await pauseTask();
+  }
+  if (activeBreak) { showToast("⚠️ Already on a break.", "error"); return; }
+
+  const type = document.getElementById("input-break-type").value;
+  const now = new Date();
+  const fields = {
+    StaffEmail:    currentUser.email,
+    StaffName:     currentUser.name,
+    Department:    currentUser.department,
+    StaffRole:     currentUser.role,
+    Client:        currentUser.client,
+    TaskName:      type + " Break",
+    Category:      "Break",
+    TaskStartTime: now.toISOString(),
+    IsBreak:       true,
+    BreakType:     type,
+    CountsToLimit: true,
+    PingsMissed:   totalPingsMissed,
+    TaskStatus:    "Active",
+    OutOfShift:    isOutOfShift(),
+    WorkDate:      now.toISOString(),
+  };
+
+  try {
+    const item = await spPost(fields);
+    activeBreak = { type, startTime: now, itemId: item.id };
+    document.getElementById("break-type-display").textContent = type + " Break";
+    startBreakTimer();
+    document.getElementById("break-overlay").classList.add("show");
+    
+    // Add to activity log dynamically
+    addLogEntry({
+      id: item.id,
+      itemId: item.id,
+      name: type + " Break",
+      category: "Break",
+      taskStartTime: now,
+      taskStatus: "Active",
+      OutOfShift: fields.OutOfShift
+    });
+    
+    showToast("☕ Break started: " + type, "success");
+  } catch(e) {
+    showToast("❌ Error logging break: " + e.message, "error");
+  }
+}
+
+async function endBreak() {
+  if (!activeBreak) return;
+  const now = new Date();
+  const elapsed = Math.round((now - activeBreak.startTime) / 60000);
+  try {
+    await spPatch(activeBreak.itemId, {
+      TaskStatus:      "Completed",
+      TaskEndTime:     now.toISOString(),
+      DurationMinutes: elapsed,
+    });
+    clearInterval(breakTimerInterval);
+    totalBreakMs += (now - activeBreak.startTime);
+    
+    // Update dynamic break log in view
+    updateLogEntry(activeBreak.itemId, {
+      taskStatus: "Completed",
+      taskEndTime: now,
+      durationMinutes: elapsed
+    });
+    
+    activeBreak = null;
+    document.getElementById("break-overlay").classList.remove("show");
+    showToast("✓ Break ended (" + elapsed + " min)", "success");
+    updateStats();
+  } catch(e) {
+    showToast("❌ Error: " + e.message, "error");
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  MISSED PING
+// ═══════════════════════════════════════════════
+async function logMissedPing() {
+  if (!confirm("Log a missed ping? This will be recorded on your current active task if any, or in your roster state.")) return;
+  totalPingsMissed++;
+  updateStats();
+  if (activeTask) {
+    try {
+      await spPatch(activeTask.itemId, { PingsMissed: totalPingsMissed });
+      updateLogEntry(activeTask.itemId, { PingsMissed: totalPingsMissed });
+    } catch(e) {
+      console.error(e);
+    }
+  }
+  showToast("🔔 Missed ping logged (" + totalPingsMissed + " total)", "error");
+}
+
+// ═══════════════════════════════════════════════
+//  TIMERS
+// ═══════════════════════════════════════════════
+function startTaskTimer() {
+  clearInterval(taskTimerInterval);
+  taskTimerInterval = setInterval(() => {
+    if (!activeTask) return;
+    const elapsed = Math.round((Date.now() - activeTask.startTime) / 1000);
+    const m = Math.floor(elapsed / 60), s = elapsed % 60;
+    document.getElementById("active-task-timer").textContent =
+      String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+  }, 1000);
+}
+
+function startBreakTimer() {
+  clearInterval(breakTimerInterval);
+  breakTimerInterval = setInterval(() => {
+    if (!activeBreak) return;
+    const elapsed = Math.round((Date.now() - activeBreak.startTime) / 1000);
+    const m = Math.floor(elapsed / 60), s = elapsed % 60;
+    document.getElementById("break-timer-display").textContent =
+      String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+  }, 1000);
+}
+
+// ═══════════════════════════════════════════════
+//  STATEFUL SHAREPOINT SYNC (Premium Feature)
+// ═══════════════════════════════════════════════
+async function fetchTodayLogs() {
+  try {
+    accessToken = await getToken();
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    // Fetch recent items from SharePoint list
+    const url = `https://graph.microsoft.com/v1.0/sites/${CONFIG.sharePointHost}:/sites/${CONFIG.sharePointSite}:/lists/${CONFIG.listName}/items?expand=fields&$top=200`;
+    const res = await fetch(url, {
+      headers: { "Authorization": "Bearer " + accessToken }
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    
+    // Filter today's entries for current user
+    todayLogs = data.value
+      .filter(item => {
+        const fields = item.fields || {};
+        if (!fields.StaffEmail || !fields.TaskStartTime) return false;
+        const entryDate = new Date(fields.TaskStartTime);
+        return entryDate >= today && fields.StaffEmail.toLowerCase() === currentUser.email.toLowerCase();
+      })
+      .map(item => {
+        const f = item.fields;
+        return {
+          id: item.id,
+          itemId: item.id,
+          name: f.TaskName,
+          category: f.Category,
+          notes: f.Notes || "",
+          taskStartTime: f.TaskStartTime,
+          taskEndTime: f.TaskEndTime,
+          durationMinutes: f.DurationMinutes || 0,
+          taskStatus: f.TaskStatus,
+          OutOfShift: f.OutOfShift,
+          IsBreak: f.IsBreak,
+          PingsMissed: f.PingsMissed || 0
+        };
+      });
+
+    // Sort logs descending (latest first)
+    todayLogs.sort((a, b) => new Date(b.taskStartTime) - new Date(a.taskStartTime));
+
+    // Reset statistical counters
+    totalProductiveMs = 0;
+    totalBreakMs = 0;
+    totalTasks = 0;
+    totalPingsMissed = 0;
+
+    todayLogs.forEach(t => {
+      const durationMs = (t.durationMinutes || 0) * 60000;
+      if (t.category === "Productive" || t.category === "Internal") {
+        totalProductiveMs += durationMs;
+        if (t.taskStatus === "Completed") totalTasks++;
+      } else if (t.category === "Break") {
+        totalBreakMs += durationMs;
+      }
+      totalPingsMissed = Math.max(totalPingsMissed, t.PingsMissed);
+    });
+
+    // Restore active states (Task or Break) from SharePoint if any is active/paused
+    const activeEntry = todayLogs.find(t => t.taskStatus === "Active" || t.taskStatus === "Paused");
+    if (activeEntry) {
+      if (activeEntry.category === "Break") {
+        activeBreak = {
+          type: activeEntry.name.replace(" Break", ""),
+          startTime: new Date(activeEntry.taskStartTime),
+          itemId: activeEntry.id
+        };
+        document.getElementById("break-type-display").textContent = activeEntry.name;
+        startBreakTimer();
+        document.getElementById("break-overlay").classList.add("show");
+      } else {
+        activeTask = {
+          id: activeEntry.id,
+          itemId: activeEntry.id,
+          name: activeEntry.name,
+          category: activeEntry.category,
+          startTime: new Date(activeEntry.taskStartTime),
+          status: activeEntry.taskStatus,
+          notes: activeEntry.notes
+        };
+        updateActiveTaskBar();
+        if (activeEntry.taskStatus === "Active") {
+          startTaskTimer();
+        }
+        setTaskButtons(true);
+      }
+    } else {
+      activeTask = null;
+      activeBreak = null;
+      updateActiveTaskBar();
+      setTaskButtons(false);
+    }
+
+    renderLog();
+    updateStats();
+  } catch(e) {
+    console.error("Failed to sync activity state from SharePoint:", e);
+    showToast("⚠️ Offline/Sync mode active. Past activity not synced.", "error");
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════
+function setTaskButtons(hasTask) {
+  const btnComplete = document.getElementById("btn-complete");
+  const btnPause    = document.getElementById("btn-pause");
+  const btnResume   = document.getElementById("btn-resume");
+  const isActive   = hasTask && activeTask && activeTask.status === "Active";
+  const isPaused   = hasTask && activeTask && activeTask.status === "Paused";
+  btnComplete.disabled = !hasTask;
+  btnPause.disabled    = !isActive;
+  btnResume.disabled   = !isPaused;
+}
+
+function updateActiveTaskBar() {
+  const bar = document.getElementById("active-task-bar");
+  if (!activeTask) {
+    bar.classList.remove("show");
+    return;
+  }
+  bar.classList.add("show");
+  document.getElementById("active-task-name").textContent = activeTask.name;
+  document.getElementById("active-task-meta").textContent =
+    activeTask.category + (activeTask.status === "Paused" ? " · PAUSED" : " · ACTIVE");
+}
+
+function updateStats() {
+  const pm = Math.round(totalProductiveMs / 60000);
+  const bm = Math.round(totalBreakMs / 60000);
+  document.getElementById("stat-productive").textContent = pm + "m";
+  document.getElementById("stat-break").textContent = bm + "m";
+  document.getElementById("stat-tasks").textContent = totalTasks;
+  document.getElementById("stat-pings").textContent = totalPingsMissed;
+}
+
+// ── LOG ENTRIES ──
+const CATEGORY_ICON = { Productive:"💼", Break:"☕", Internal:"⚙️" };
+const CATEGORY_CLASS = { Productive:"productive", Break:"break", Internal:"internal" };
+
+function addLogEntry(task) {
+  const id = task.itemId || task.id;
+  todayLogs.unshift({ ...task, id });
+  renderLog();
+}
+
+function updateLogEntry(itemId, updates) {
+  const entry = todayLogs.find(e => e.id === itemId || e.itemId === itemId);
+  if (entry) Object.assign(entry, updates);
+  renderLog();
+}
+
+function renderLog() {
+  const list = document.getElementById("log-list");
+  if (!list) return;
+
+  const filtered = filterMode === "all"
+    ? todayLogs
+    : todayLogs.filter(t => t.category === filterMode);
+
+  if (filtered.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <div class="empty-text">No tasks logged yet for this category.</div>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = filtered.map(t => {
+    const icon = CATEGORY_ICON[t.category] || "💼";
+    const cssClass = CATEGORY_CLASS[t.category] || "productive";
+    const startTimeStr = t.taskStartTime ? new Date(t.taskStartTime).toLocaleTimeString("en-US", { hour12: false, hour: '2-digit', minute: '2-digit' }) : "—";
+    const durationText = t.taskStatus === "Active" ? "Active" : `${t.durationMinutes || 0}m`;
+    const entryExtraClass = t.taskStatus === "Active" ? "active-entry" : (t.category === "Break" ? "break-entry" : "");
+    
+    return `
+      <div class="log-entry ${entryExtraClass}">
+        <div class="entry-icon ${cssClass}">${icon}</div>
+        <div class="entry-body">
+          <div class="entry-task" title="${escapeHtml(t.name || t.TaskName)}">${escapeHtml(t.name || t.TaskName)}</div>
+          <div class="entry-meta">
+            <span>📂 ${t.category}</span>
+            <span>⏰ Started: ${startTimeStr}</span>
+            ${t.notes ? `<span>📝 ${escapeHtml(t.notes)}</span>` : ""}
+            ${t.OutOfShift ? `<span style="color:var(--red);">⚠️ Out of Shift</span>` : ""}
+          </div>
+        </div>
+        <div class="entry-right">
+          <div class="entry-duration">${durationText}</div>
+          <span class="entry-status ${t.taskStatus}">${t.taskStatus}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function filterLog(category, btn) {
+  filterMode = category;
+  document.querySelectorAll(".log-filter .filter-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  renderLog();
+}
+
+function showToast(message, type = "success") {
+  const toast = document.getElementById("toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = `show ${type}`;
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, 4000);
+}
+
+function showLoading(show) {
+  const overlay = document.getElementById("loading-overlay");
+  if (overlay) {
+    if (show) overlay.classList.add("show");
+    else overlay.classList.remove("show");
+  }
+}
+
+function showScreen(screenId) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  const target = document.getElementById("screen-" + screenId);
+  if (target) target.classList.add("active");
+}
+
+// ═══════════════════════════════════════════════
+//  PAGE INITIALIZATION
+// ═══════════════════════════════════════════════
+window.addEventListener("DOMContentLoaded", async () => {
+  try {
+    showLoading(true);
+    await loadAppConfig();
+    
+    if (!msalInstance) {
+      showScreen("login");
+      return;
+    }
+    
+    // Check if an authentication redirect just completed
+    const redirectResult = await msalInstance.handleRedirectPromise();
+    if (redirectResult && redirectResult.account) {
+      currentAccount = redirectResult.account;
+      await initUser(currentAccount.username);
+    } else {
+      // Check for already logged-in sessions
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts && accounts.length > 0) {
+        currentAccount = accounts[0];
+        await initUser(currentAccount.username);
+      } else {
+        showScreen("login");
+      }
+    }
+  } catch (e) {
+    console.error("Initialization error:", e);
+    showToast("❌ Connection error: " + e.message, "error");
+    showScreen("login");
+  } finally {
+    showLoading(false);
+  }
+});
+</script>
+</body>
+</html>
