@@ -1,14 +1,10 @@
 {
   "cleanUrls": true,
-  "functions": {
-    "api/*.js": {
-      "runtime": "@vercel/node@3"
-    }
-  },
+  "nodeVersion": "20.x",
   "rewrites": [
     { "source": "/api/config", "destination": "/api/config.js" },
     { "source": "/api/user",   "destination": "/api/user.js"   },
-    { "source": "/",           "destination": "/index.html"            },
+    { "source": "/",           "destination": "/index.html"    },
     { "source": "/tracker",    "destination": "/productivity-tracker.html" }
   ]
 }
