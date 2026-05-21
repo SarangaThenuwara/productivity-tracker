@@ -1,6 +1,5 @@
 {
   "cleanUrls": true,
-  "nodeVersion": "20.x",
   "rewrites": [
     { "source": "/api/config", "destination": "/api/config.js" },
     { "source": "/api/user",   "destination": "/api/user.js"   },
