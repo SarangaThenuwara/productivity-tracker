@@ -627,8 +627,22 @@ async function getListId() {
   if (cachedListId) return cachedListId;
   const siteId = await getSiteId();
   accessToken = await getToken();
-  // Search all lists and match by displayName (case-insensitive)
-  const url = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists`;
+
+  // Attempt 1: Direct lookup by list title via path
+  try {
+    const directUrl = `https://graph.microsoft.com/v1.0/sites/${CONFIG.sharePointHost}:/sites/${CONFIG.sharePointSite}:/lists/${CONFIG.listName}`;
+    const directRes = await fetch(directUrl, {
+      headers: { "Authorization": "Bearer " + accessToken }
+    });
+    if (directRes.ok) {
+      const directData = await directRes.json();
+      cachedListId = directData.id;
+      return cachedListId;
+    }
+  } catch(e) { /* fall through to scan */ }
+
+  // Attempt 2: Scan all lists on the site
+  const url = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists?$top=200&$select=id,displayName,name`;
   const res = await fetch(url, {
     headers: { "Authorization": "Bearer " + accessToken }
   });
@@ -638,10 +652,14 @@ async function getListId() {
     l.displayName.toLowerCase() === CONFIG.listName.toLowerCase() ||
     l.name.toLowerCase() === CONFIG.listName.toLowerCase()
   );
-  if (!match) throw new Error(`List "${CONFIG.listName}" not found. Available: ${data.value.map(l=>l.displayName).join(", ")}`);
+  if (!match) throw new Error(
+    `List "${CONFIG.listName}" not found on site [${siteId}]. ` +
+    `Available: ${data.value.map(l => l.displayName).join(", ")}`
+  );
   cachedListId = match.id;
   return cachedListId;
 }
+
 
 
 // ── active task state ──
