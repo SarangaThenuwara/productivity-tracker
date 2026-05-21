@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main        # Preview deployment for PRs
+  workflow_dispatch:  # Manual trigger from GitHub Actions UI
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -19,7 +20,7 @@ jobs:
   deploy-production:
     name: 🌐 Deploy to Production
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
 
     steps:
       - name: ⬇️ Checkout Repository
