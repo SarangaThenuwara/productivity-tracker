@@ -607,6 +607,21 @@ const SHIFTS = {
 let currentUser    = null;   // staff record loaded from server
 let currentAccount = null;   // MSAL account
 let accessToken    = null;
+let cachedSiteId   = null;   // resolved Site ID cache
+
+async function getSiteId() {
+  if (cachedSiteId) return cachedSiteId;
+  accessToken = await getToken();
+  const url = `https://graph.microsoft.com/v1.0/sites/${CONFIG.sharePointHost}:/sites/${CONFIG.sharePointSite}`;
+  const res = await fetch(url, {
+    headers: { "Authorization": "Bearer " + accessToken }
+  });
+  if (!res.ok) throw new Error("Failed to resolve Site ID: " + await res.text());
+  const data = await res.json();
+  cachedSiteId = data.id;
+  return cachedSiteId;
+}
+
 
 // ── active task state ──
 let activeTask = null;    // { id, name, category, startTime, status, itemId }
@@ -784,13 +799,15 @@ function isOutOfShift() {
 // ═══════════════════════════════════════════════
 //  SHAREPOINT API
 // ═══════════════════════════════════════════════
-function spBase() {
-  return `https://graph.microsoft.com/v1.0/sites/${CONFIG.sharePointHost}:/sites/${CONFIG.sharePointSite}:/lists/${CONFIG.listName}/items`;
+async function spBase() {
+  const siteId = await getSiteId();
+  return `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${CONFIG.listName}/items`;
 }
 
 async function spPost(fields) {
   accessToken = await getToken();
-  const res = await fetch(spBase(), {
+  const base = await spBase();
+  const res = await fetch(base, {
     method: "POST",
     headers: {
       "Authorization": "Bearer " + accessToken,
@@ -804,7 +821,8 @@ async function spPost(fields) {
 
 async function spPatch(itemId, fields) {
   accessToken = await getToken();
-  const res = await fetch(spBase() + `/${itemId}/fields`, {
+  const base = await spBase();
+  const res = await fetch(base + `/${itemId}/fields`, {
     method: "PATCH",
     headers: {
       "Authorization": "Bearer " + accessToken,
@@ -1057,11 +1075,12 @@ function startBreakTimer() {
 async function fetchTodayLogs() {
   try {
     accessToken = await getToken();
+    const siteId = await getSiteId();
     const today = new Date();
     today.setHours(0,0,0,0);
     
     // Fetch recent items from SharePoint list
-    const url = `https://graph.microsoft.com/v1.0/sites/${CONFIG.sharePointHost}:/sites/${CONFIG.sharePointSite}:/lists/${CONFIG.listName}/items?expand=fields&$top=200`;
+    const url = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${CONFIG.listName}/items?expand=fields&$top=200`;
     const res = await fetch(url, {
       headers: { "Authorization": "Bearer " + accessToken }
     });
