@@ -1,0 +1,122 @@
+name: 🚀 Deploy to Vercel
+
+on:
+  push:
+    branches:
+      - main        # Production deployment
+  pull_request:
+    branches:
+      - main        # Preview deployment for PRs
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  # ─────────────────────────────────────────────
+  # JOB 1: Deploy to Production (main branch)
+  # ─────────────────────────────────────────────
+  deploy-production:
+    name: 🌐 Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🔧 Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: 🔑 Pull Vercel Environment (links local project)
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: ⚙️ Sync Environment Variables to Vercel
+        run: |
+          echo "Syncing environment variables to Vercel production..."
+          echo "${{ secrets.AZURE_CLIENT_ID }}"    | vercel env add AZURE_CLIENT_ID    production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
+          echo "${{ secrets.AZURE_TENANT_ID }}"    | vercel env add AZURE_TENANT_ID    production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
+          echo "${{ secrets.SHAREPOINT_HOST }}"    | vercel env add SHAREPOINT_HOST    production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
+          echo "${{ secrets.SHAREPOINT_SITE }}"    | vercel env add SHAREPOINT_SITE    production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
+          echo "${{ secrets.SHAREPOINT_LIST_NAME }}" | vercel env add SHAREPOINT_LIST_NAME production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
+          echo "✅ Environment variables synced."
+
+      - name: 🏗️ Build Project
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: 🚀 Deploy to Production
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "deployment_url=$url" >> $GITHUB_OUTPUT
+          echo "✅ Deployed to: $url"
+
+      - name: 📢 Report Deployment URL
+        run: |
+          echo "## 🚀 Production Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | ${{ steps.deploy.outputs.deployment_url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`main\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | Production |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────
+  # JOB 2: Deploy Preview (Pull Requests)
+  # ─────────────────────────────────────────────
+  deploy-preview:
+    name: 🔍 Deploy Preview
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🔧 Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: 🔑 Pull Vercel Environment
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: 🏗️ Build Preview
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: 🚀 Deploy Preview
+        id: preview
+        run: |
+          url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "preview_url=$url" >> $GITHUB_OUTPUT
+          echo "✅ Preview deployed to: $url"
+
+      - name: 💬 Comment Preview URL on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const previewUrl = '${{ steps.preview.outputs.preview_url }}';
+            const body = `## 🔍 Preview Deployment Ready\n\n| Property | Value |\n|----------|-------|\n| **Preview URL** | ${previewUrl} |\n| **PR** | #${{ github.event.pull_request.number }} |\n| **Commit** | \`${{ github.sha }}\` |\n\n> This preview will be available until the PR is merged or closed.`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
