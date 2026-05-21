@@ -23,6 +23,7 @@ function getStaffRoster() {
 
   // 3. Ultimate secure fallback (matching the original roster if file not present)
   return [
+    { "email": "tu2@outrightbposervices.com",            "name": "Saranga Thenuwara", "department": "Operations", "role": "Agent",    "client": "Client A", "shift": "morning" },
     { "email": "staff1@outrightbposervicessdnbhd.com",   "name": "Staff Member 1",  "department": "Operations", "role": "Agent",    "client": "Client A", "shift": "morning" },
     { "email": "staff2@outrightbposervicessdnbhd.com",   "name": "Staff Member 2",  "department": "Operations", "role": "Agent",    "client": "Client A", "shift": "morning" },
     { "email": "staff3@outrightbposervicessdnbhd.com",   "name": "Staff Member 3",  "department": "Operations", "role": "Agent",    "client": "Client B", "shift": "morning" },
