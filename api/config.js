@@ -13,11 +13,18 @@ module.exports = (req, res) => {
     return;
   }
 
+  const listIdentifier =
+    process.env.SHAREPOINT_LIST_ID ||
+    process.env.SHAREPOINT_LIST_NAME ||
+    "TaskLog";
+
+  console.log(`[Config] Using SharePoint list identifier: ${listIdentifier}`);
+
   res.status(200).json({
     clientId: process.env.AZURE_CLIENT_ID || "YOUR_AZURE_APP_CLIENT_ID",
     tenantId: process.env.AZURE_TENANT_ID || "YOUR_AZURE_TENANT_ID",
     sharePointHost: process.env.SHAREPOINT_HOST || "outrightbposervicessdnbhd.sharepoint.com",
     sharePointSite: process.env.SHAREPOINT_SITE || "OutrightProductivity",
-    listName: process.env.SHAREPOINT_LIST_NAME || "TaskLog"
+    listName: listIdentifier,
   });
 };
