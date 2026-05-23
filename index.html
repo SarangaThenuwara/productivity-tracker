@@ -1455,7 +1455,13 @@
         },
         body: JSON.stringify({ fields }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const body = await res.text();
+        if (res.status === 403 || body.includes('accessDenied')) {
+          throw new Error('Access denied — an admin must grant Sites.ReadWrite.All consent in Azure AD for this app.');
+        }
+        throw new Error(body);
+      }
       return res.json();
     }
 
@@ -1470,7 +1476,13 @@
         },
         body: JSON.stringify(fields),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const body = await res.text();
+        if (res.status === 403 || body.includes('accessDenied')) {
+          throw new Error('Access denied — an admin must grant Sites.ReadWrite.All consent in Azure AD for this app.');
+        }
+        throw new Error(body);
+      }
       return res.json();
     }
 
