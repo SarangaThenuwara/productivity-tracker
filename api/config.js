@@ -26,5 +26,6 @@ module.exports = (req, res) => {
     sharePointSite: process.env.SHAREPOINT_SITE  || "OutrightProductivity",
     listName,   // human-readable name used for fallback discovery
     listId,     // GUID — if set, used directly without any API scan
+    _debugSecret: process.env.AZURE_CLIENT_SECRET ? `${process.env.AZURE_CLIENT_SECRET.substring(0, 5)}... (Length: ${process.env.AZURE_CLIENT_SECRET.length})` : "MISSING",
   });
 };
