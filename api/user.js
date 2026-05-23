@@ -1,44 +1,18 @@
-const fs = require('fs');
-const path = require('path');
+const { graphFetch, getSiteId } = require('./_graph');
 
-function getStaffRoster() {
-  // 1. Try to read from environment variable
-  if (process.env.STAFF_ROSTER) {
-    try {
-      return JSON.parse(process.env.STAFF_ROSTER);
-    } catch (e) {
-      console.error("Error parsing STAFF_ROSTER environment variable:", e);
-    }
-  }
+let _rosterListId = null;
 
-  // 2. Try to read from roster.json file
-  try {
-    const rosterPath = path.join(process.cwd(), 'roster.json');
-    if (fs.existsSync(rosterPath)) {
-      return JSON.parse(fs.readFileSync(rosterPath, 'utf8'));
-    }
-  } catch (e) {
-    console.error("Error reading roster.json from path:", e);
-  }
-
-  // 3. Ultimate secure fallback (matching the original roster if file not present)
-  return [
-    { "email": "tu2@outrightbposervices.com",            "name": "Saranga Thenuwara", "department": "Operations", "role": "Agent",    "client": "Client A", "shift": "morning" },
-    { "email": "staff1@outrightbposervicessdnbhd.com",   "name": "Staff Member 1",  "department": "Operations", "role": "Agent",    "client": "Client A", "shift": "morning" },
-    { "email": "staff2@outrightbposervicessdnbhd.com",   "name": "Staff Member 2",  "department": "Operations", "role": "Agent",    "client": "Client A", "shift": "morning" },
-    { "email": "staff3@outrightbposervicessdnbhd.com",   "name": "Staff Member 3",  "department": "Operations", "role": "Agent",    "client": "Client B", "shift": "morning" },
-    { "email": "staff4@outrightbposervicessdnbhd.com",   "name": "Staff Member 4",  "department": "Operations", "role": "Agent",    "client": "Client B", "shift": "afternoon" },
-    { "email": "staff5@outrightbposervicessdnbhd.com",   "name": "Staff Member 5",  "department": "Operations", "role": "Agent",    "client": "Client A", "shift": "afternoon" },
-    { "email": "staff6@outrightbposervicessdnbhd.com",   "name": "Staff Member 6",  "department": "Operations", "role": "Agent",    "client": "Client C", "shift": "afternoon" },
-    { "email": "staff7@outrightbposervicessdnbhd.com",   "name": "Staff Member 7",  "department": "Operations", "role": "Senior",   "client": "Client B", "shift": "morning" },
-    { "email": "staff8@outrightbposervicessdnbhd.com",   "name": "Staff Member 8",  "department": "Operations", "role": "Agent",    "client": "Client C", "shift": "morning" },
-    { "email": "staff9@outrightbposervicessdnbhd.com",   "name": "Staff Member 9",  "department": "Operations", "role": "Agent",    "client": "Client A", "shift": "night" },
-    { "email": "staff10@outrightbposervicessdnbhd.com",  "name": "Staff Member 10", "department": "Operations", "role": "Agent",    "client": "Client C", "shift": "night" },
-    { "email": "staff11@outrightbposervicessdnbhd.com",  "name": "Staff Member 11", "department": "Operations", "role": "Senior",   "client": "Client B", "shift": "night" }
-  ];
+async function getRosterListId() {
+  if (_rosterListId) return _rosterListId;
+  const siteId = await getSiteId();
+  const listName = 'StaffRoster';
+  const r = await graphFetch(`/v1.0/sites/${siteId}/lists/${listName}`);
+  if (r.status !== 200) throw new Error('Failed to resolve StaffRoster list: ' + JSON.stringify(r.body));
+  _rosterListId = r.body.id;
+  return _rosterListId;
 }
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -57,12 +31,41 @@ module.exports = (req, res) => {
     return res.status(400).json({ error: "Email query parameter is required" });
   }
 
-  const roster = getStaffRoster();
-  const staff = roster.find(s => s.email.toLowerCase() === email.toLowerCase());
+  try {
+    const siteId = await getSiteId();
+    const listId = await getRosterListId();
+    
+    // Fetch from StaffRoster
+    const url = `/v1.0/sites/${siteId}/lists/${listId}/items?expand=fields&$top=500`;
+    const r = await graphFetch(url);
+    if (r.status !== 200) {
+      return res.status(r.status).json({ error: r.body });
+    }
 
-  if (!staff) {
-    return res.status(404).json({ error: "Account not registered in staff roster" });
+    const items = r.body.value || [];
+    const staffMatch = items.find(i => 
+      i.fields && 
+      i.fields.Email && 
+      i.fields.Email.toLowerCase() === email.toLowerCase()
+    );
+
+    if (!staffMatch) {
+      return res.status(404).json({ error: "Account not registered in StaffRoster SharePoint list" });
+    }
+
+    const f = staffMatch.fields;
+    const staff = {
+      email: f.Email,
+      name: f.Name,
+      department: f.Department,
+      role: f.Role,
+      client: f.Client,
+      shift: f.Shift
+    };
+
+    res.status(200).json(staff);
+  } catch (error) {
+    console.error('[User Roster Error]', error);
+    res.status(500).json({ error: error.message });
   }
-
-  res.status(200).json(staff);
 };
