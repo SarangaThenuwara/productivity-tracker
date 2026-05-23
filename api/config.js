@@ -13,18 +13,18 @@ module.exports = (req, res) => {
     return;
   }
 
-  const listIdentifier =
-    process.env.SHAREPOINT_LIST_ID ||
-    process.env.SHAREPOINT_LIST_NAME ||
-    "TaskLog";
+  const listName = process.env.SHAREPOINT_LIST_NAME || "TaskLog";
+  // listId is the raw GUID — when present, Graph API lookup is skipped entirely
+  const listId   = process.env.SHAREPOINT_LIST_ID   || null;
 
-  console.log(`[Config] Using SharePoint list identifier: ${listIdentifier}`);
+  console.log(`[Config] listName=${listName}  listId=${listId || "(auto-discover)"}`);
 
   res.status(200).json({
-    clientId: process.env.AZURE_CLIENT_ID || "YOUR_AZURE_APP_CLIENT_ID",
-    tenantId: process.env.AZURE_TENANT_ID || "YOUR_AZURE_TENANT_ID",
-    sharePointHost: process.env.SHAREPOINT_HOST || "outrightbposervicessdnbhd.sharepoint.com",
-    sharePointSite: process.env.SHAREPOINT_SITE || "OutrightProductivity",
-    listName: listIdentifier,
+    clientId:       process.env.AZURE_CLIENT_ID  || "YOUR_AZURE_APP_CLIENT_ID",
+    tenantId:       process.env.AZURE_TENANT_ID  || "YOUR_AZURE_TENANT_ID",
+    sharePointHost: process.env.SHAREPOINT_HOST  || "outrightbposervicessdnbhd.sharepoint.com",
+    sharePointSite: process.env.SHAREPOINT_SITE  || "OutrightProductivity",
+    listName,   // human-readable name used for fallback discovery
+    listId,     // GUID — if set, used directly without any API scan
   });
 };

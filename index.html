@@ -1203,6 +1203,11 @@
 
     async function getListId() {
       if (cachedListId) return cachedListId;
+      // If the server already gave us the GUID, use it directly — no Graph scan needed
+      if (CONFIG.listId) {
+        cachedListId = CONFIG.listId;
+        return cachedListId;
+      }
       const siteId = await getSiteId();
       accessToken = await getToken();
       const targetKey = normalizeListKey(CONFIG.listName);
@@ -1275,12 +1280,13 @@
         if (!res.ok) throw new Error("Could not fetch system settings from the server.");
         const data = await res.json();
         CONFIG = {
-          clientId: data.clientId,
-          tenantId: data.tenantId,
-          redirectUri: window.location.origin,
+          clientId:       data.clientId,
+          tenantId:       data.tenantId,
+          redirectUri:    window.location.origin,
           sharePointHost: data.sharePointHost,
           sharePointSite: data.sharePointSite,
-          listName: data.listName
+          listName:       data.listName,
+          listId:         data.listId || null,  // GUID shortcut — skips discovery when set
         };
 
         const msalConfig = {
