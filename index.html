@@ -5,11 +5,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Outright BPO — Productivity Tracker</title>
-  <script
-    src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library/2.38.0/msal-browser.min.js"></script>
+  <!-- MSAL Browser: primary CDN with local fallback -->
+  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
   <script>
     if (typeof msal === 'undefined') {
-      document.write('<script src="/msal-browser.min.js"><\/script>');
+      document.write('<script src="https://unpkg.com/@azure/msal-browser@2.38.0/lib/msal-browser.min.js"><\/script>');
     }
   </script>
   <style>
