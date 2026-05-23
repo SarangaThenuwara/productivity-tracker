@@ -10,6 +10,7 @@ app.use(express.json());
 // Bind API Handlers (Mimic Vercel serverless functions locally)
 const configHandler = require('./api/config');
 const userHandler = require('./api/user');
+const sharepointHandler = require('./api/sharepoint');
 
 app.get('/api/config', (req, res) => {
   configHandler(req, res);
@@ -17,6 +18,10 @@ app.get('/api/config', (req, res) => {
 
 app.get('/api/user', (req, res) => {
   userHandler(req, res);
+});
+
+app.use('/api/sharepoint', (req, res) => {
+  sharepointHandler(req, res);
 });
 
 // Serve static assets in root
