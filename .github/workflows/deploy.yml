@@ -39,26 +39,26 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: 🔑 Pull Vercel Environment (links local project)
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: ⚙️ Sync Environment Variables to Vercel
         run: |
           echo "Syncing environment variables to Vercel production..."
-          echo "${{ secrets.AZURE_CLIENT_ID }}"    | vercel env add AZURE_CLIENT_ID    production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
-          echo "${{ secrets.AZURE_TENANT_ID }}"    | vercel env add AZURE_TENANT_ID    production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
-          echo "${{ secrets.AZURE_CLIENT_SECRET }}"| vercel env add AZURE_CLIENT_SECRET production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
-          echo "${{ secrets.SHAREPOINT_HOST }}"    | vercel env add SHAREPOINT_HOST    production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
-          echo "${{ secrets.SHAREPOINT_SITE }}"    | vercel env add SHAREPOINT_SITE    production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
-          echo "${{ secrets.SHAREPOINT_LIST_NAME }}" | vercel env add SHAREPOINT_LIST_NAME production --token=${{ secrets.VERCEL_TOKEN }} --force 2>/dev/null || true
+          echo "${{ secrets.AZURE_CLIENT_ID }}"    | vercel env add AZURE_CLIENT_ID    production --token="${{ secrets.VERCEL_TOKEN }}" --force 2>/dev/null || true
+          echo "${{ secrets.AZURE_TENANT_ID }}"    | vercel env add AZURE_TENANT_ID    production --token="${{ secrets.VERCEL_TOKEN }}" --force 2>/dev/null || true
+          echo "${{ secrets.AZURE_CLIENT_SECRET }}"| vercel env add AZURE_CLIENT_SECRET production --token="${{ secrets.VERCEL_TOKEN }}" --force 2>/dev/null || true
+          echo "${{ secrets.SHAREPOINT_HOST }}"    | vercel env add SHAREPOINT_HOST    production --token="${{ secrets.VERCEL_TOKEN }}" --force 2>/dev/null || true
+          echo "${{ secrets.SHAREPOINT_SITE }}"    | vercel env add SHAREPOINT_SITE    production --token="${{ secrets.VERCEL_TOKEN }}" --force 2>/dev/null || true
+          echo "${{ secrets.SHAREPOINT_LIST_NAME }}" | vercel env add SHAREPOINT_LIST_NAME production --token="${{ secrets.VERCEL_TOKEN }}" --force 2>/dev/null || true
           echo "✅ Environment variables synced."
 
       - name: 🏗️ Build Project
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: 🚀 Deploy to Production
         id: deploy
         run: |
-          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")
           echo "deployment_url=$url" >> $GITHUB_OUTPUT
           echo "✅ Deployed to: $url"
 
@@ -98,15 +98,15 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: 🔑 Pull Vercel Environment
-        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=preview --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: 🏗️ Build Preview
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: 🚀 Deploy Preview
         id: preview
         run: |
-          url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(vercel deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}")
           echo "preview_url=$url" >> $GITHUB_OUTPUT
           echo "✅ Preview deployed to: $url"
 
