@@ -1,8 +1,10 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/config", "destination": "/api/config.js" },
-    { "source": "/api/user",   "destination": "/api/user.js"   },
-    { "source": "/(.*)",       "destination": "/index.html"    }
+    { "source": "/api/config",             "destination": "/api/config.js" },
+    { "source": "/api/user",               "destination": "/api/user.js"   },
+    { "source": "/api/sharepoint/:itemId", "destination": "/api/sharepoint.js?itemId=:itemId" },
+    { "source": "/api/sharepoint",         "destination": "/api/sharepoint.js" },
+    { "source": "/(.*)",                   "destination": "/index.html"    }
   ]
 }
