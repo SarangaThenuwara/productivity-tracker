@@ -45,6 +45,13 @@ module.exports = async (req, res) => {
         const r2 = await graphFetch(`/v1.0/sites/${siteId}/lists/${listId}/columns`);
         return res.status(200).json(r2.body);
       }
+      if (req.query && req.query.debug === 'fix-column') {
+        const columnId = "177a840f-a130-49b8-b89e-09ec39c4757a"; // StaffEmail column ID
+        const rFix = await graphFetch(`/v1.0/sites/${siteId}/lists/${listId}/columns/${columnId}`, 'PATCH', {
+          enforceUniqueValues: false
+        });
+        return res.status(200).json(rFix);
+      }
       
       const email = req.query && req.query.email;
       let url = base + '?expand=fields&$top=500';
