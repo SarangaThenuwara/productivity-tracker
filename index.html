@@ -1416,6 +1416,7 @@
 
       const now = new Date();
       const fields = {
+        Title: `Task - ${currentUser.name} - ${now.getTime()}`,
         StaffEmail: currentUser.email,
         StaffName: currentUser.name,
         Department: currentUser.department,
@@ -1524,6 +1525,7 @@
       const type = document.getElementById("input-break-type").value;
       const now = new Date();
       const fields = {
+        Title: `Break - ${currentUser.name} - ${now.getTime()}`,
         StaffEmail: currentUser.email,
         StaffName: currentUser.name,
         Department: currentUser.department,
