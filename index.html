@@ -1175,91 +1175,6 @@
     let cachedSiteId = null;   // resolved Site ID cache
     let cachedListId = null;   // resolved List ID cache
 
-    async function getSiteId() {
-      if (cachedSiteId) return cachedSiteId;
-      accessToken = await getToken();
-      const url = `https://graph.microsoft.com/v1.0/sites/${CONFIG.sharePointHost}:/sites/${CONFIG.sharePointSite}`;
-      const res = await fetch(url, {
-        headers: { "Authorization": "Bearer " + accessToken }
-      });
-      if (!res.ok) throw new Error("Failed to resolve Site ID: " + await res.text());
-      const data = await res.json();
-      cachedSiteId = data.id;
-      return cachedSiteId;
-    }
-
-    function normalizeListKey(name) {
-      return (name || "").toLowerCase().replace(/[\s_-]+/g, "");
-    }
-
-    async function resolveListByUrl(url) {
-      const res = await fetch(url, {
-        headers: { "Authorization": "Bearer " + accessToken }
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.id || null;
-    }
-
-    async function getListId() {
-      if (cachedListId) return cachedListId;
-      // If the server already gave us the GUID, use it directly — no Graph scan needed
-      if (CONFIG.listId) {
-        cachedListId = CONFIG.listId;
-        return cachedListId;
-      }
-      const siteId = await getSiteId();
-      accessToken = await getToken();
-      const targetKey = normalizeListKey(CONFIG.listName);
-      const listPathSuffix = `/lists/${CONFIG.listName.toLowerCase()}`;
-      const encodedName = encodeURIComponent(CONFIG.listName);
-
-      // Attempt 1: Direct lookup (hostname path, site-id path, encoded name)
-      const directUrls = [
-        `https://graph.microsoft.com/v1.0/sites/${CONFIG.sharePointHost}:/sites/${CONFIG.sharePointSite}:/lists/${encodedName}`,
-        `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${encodedName}`,
-      ];
-      for (const directUrl of directUrls) {
-        const id = await resolveListByUrl(directUrl);
-        if (id) {
-          cachedListId = id;
-          return cachedListId;
-        }
-      }
-
-      // Attempt 2: Scan site lists (include hidden; paginate; match name or /Lists/TaskLog URL)
-      const allLists = [];
-      let scanUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/lists?$top=200&$select=id,displayName,name,webUrl&includeHiddenLists=true`;
-      while (scanUrl) {
-        const res = await fetch(scanUrl, {
-          headers: { "Authorization": "Bearer " + accessToken }
-        });
-        if (!res.ok) throw new Error("Failed to fetch site lists: " + await res.text());
-        const data = await res.json();
-        allLists.push(...(data.value || []));
-        scanUrl = data["@odata.nextLink"] || null;
-      }
-
-      const match = allLists.find(l => {
-        const web = (l.webUrl || "").toLowerCase();
-        return (
-          normalizeListKey(l.displayName) === targetKey ||
-          normalizeListKey(l.name) === targetKey ||
-          web.endsWith(listPathSuffix) ||
-          web.includes(listPathSuffix + "/")
-        );
-      });
-      if (!match) {
-        throw new Error(
-          `List "${CONFIG.listName}" not found on "${CONFIG.sharePointSite}". ` +
-          `Available: ${allLists.map(l => l.displayName).join(", ")}`
-        );
-      }
-      cachedListId = match.id;
-      return cachedListId;
-    }
-
-
 
     // ── active task state ──
     let activeTask = null;    // { id, name, category, startTime, status, itemId }
@@ -1353,8 +1268,11 @@
       } catch (e) {
         showLoading(false);
         showToast("❌ " + e.message + ". Contact your manager.", "error");
+        showScreen("login");
         if (msalInstance) {
-          msalInstance.logout();
+          setTimeout(() => {
+            msalInstance.logoutRedirect();
+          }, 4000);
         }
       }
     }
@@ -1380,7 +1298,7 @@
       clearInterval(taskTimerInterval);
       clearInterval(breakTimerInterval);
       if (msalInstance) {
-        msalInstance.logout();
+        msalInstance.logoutRedirect();
       }
     }
 
@@ -1460,7 +1378,7 @@
 
     async function spPatch(itemId, fields) {
       const base = spBase();
-      const res = await fetch(base + `/${itemId}`, {
+      const res = await fetch(base + `?itemId=${itemId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -1478,8 +1396,17 @@
     //  TASK LOGIC
     // ═══════════════════════════════════════════════
     async function startTask() {
-      if (activeTask) { showToast("⚠️ Complete or pause current task first.", "error"); return; }
       if (activeBreak) { showToast("⚠️ End your break first.", "error"); return; }
+
+      // Auto-complete any currently running task so users can switch tasks seamlessly
+      if (activeTask && activeTask.status === "Active") {
+        await completeTask();
+      }
+      // If still blocked (paused task or complete failed), warn and stop
+      if (activeTask) {
+        showToast("⚠️ Please complete or resume the paused task first.", "error");
+        return;
+      }
 
       const name = document.getElementById("input-task").value.trim();
       const category = document.getElementById("input-category").value;
@@ -1521,6 +1448,7 @@
         updateStats();
       } catch (e) {
         showToast("❌ Failed to log task: " + e.message, "error");
+        setTaskButtons(!!activeTask);
       }
       document.getElementById("btn-start").disabled = false;
     }

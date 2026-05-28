@@ -65,7 +65,14 @@ module.exports = async (req, res) => {
     // PATCH /api/sharepoint/:itemId  — update an existing item's fields
     // itemId is injected as a query param by vercel.json rewrite: /api/sharepoint/:itemId → ?itemId=:itemId
     if (req.method === 'PATCH') {
-      const itemId = (req.query && req.query.itemId) || (req.url && req.url.split('?')[0].split('/').filter(Boolean).pop());
+      let itemId = req.query && req.query.itemId;
+      if (!itemId && req.url && req.url.includes('?')) {
+        const urlParams = new URLSearchParams(req.url.split('?')[1]);
+        itemId = urlParams.get('itemId');
+      }
+      if (!itemId && req.url) {
+        itemId = req.url.split('?')[0].split('/').filter(Boolean).pop();
+      }
       if (!itemId || itemId === 'sharepoint') return res.status(400).json({ error: 'itemId param required' });
       const r = await graphFetch(`${base}/${itemId}/fields`, 'PATCH', req.body);
       return res.status(r.status).json(r.body);
