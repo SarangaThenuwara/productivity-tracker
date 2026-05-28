@@ -41,6 +41,11 @@ module.exports = async (req, res) => {
 
     // GET /api/sharepoint  — fetch today's items (optionally filtered by ?email=)
     if (req.method === 'GET') {
+      if (req.query && req.query.debug === 'columns') {
+        const r2 = await graphFetch(`/v1.0/sites/${siteId}/lists/${listId}/columns`);
+        return res.status(200).json(r2.body);
+      }
+      
       const email = req.query && req.query.email;
       let url = base + '?expand=fields&$top=500';
       const r = await graphFetch(url);
