@@ -1505,8 +1505,14 @@
     async function completeTask() {
       if (!activeTask) return;
       
-      const txCount = document.getElementById("input-tx-count").value;
-      const txType = document.getElementById("input-tx-type").value;
+      const txCount = document.getElementById("input-tx-count").value.trim();
+      const txType = document.getElementById("input-tx-type").value.trim();
+
+      let finalNotes = activeTask.notes || "";
+      if (txCount || txType) {
+        const txInfo = `[Transactions: ${txCount || "0"} x ${txType || "General"}]`;
+        finalNotes = finalNotes ? `${finalNotes} | ${txInfo}` : txInfo;
+      }
 
       const now = new Date();
       const elapsed = Math.round((now - activeTask.startTime) / 60000);
@@ -1517,14 +1523,15 @@
           DurationMinutes: elapsed,
         };
 
-        if (txCount) patchData.NoOfTransactions = parseInt(txCount, 10);
-        if (txType) patchData.TransactionType = txType;
+        if (txCount || txType) {
+          patchData.Notes = finalNotes;
+        }
 
         await spPatch(activeTask.itemId, patchData);
         clearInterval(taskTimerInterval);
         totalProductiveMs += (now - activeTask.startTime);
         updateLogEntry(activeTask.itemId, {
-          taskStatus: "Completed", taskEndTime: now, durationMinutes: elapsed
+          taskStatus: "Completed", taskEndTime: now, durationMinutes: elapsed, notes: finalNotes
         });
         showToast("✓ Task completed! (" + elapsed + " min)", "success");
         activeTask = null;
