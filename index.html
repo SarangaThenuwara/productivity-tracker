@@ -581,7 +581,6 @@
     }
 
     /* RIGHT PANEL — LOG */
-    .right-panel {}
 
     .log-header {
       display: flex;
@@ -1096,6 +1095,19 @@
           <button class="btn-secondary" id="btn-pause" onclick="pauseTask()" disabled>⏸ Pause</button>
           <button class="btn-secondary" id="btn-resume" onclick="resumeTask()" disabled>▶ Resume</button>
         </div>
+        
+        <!-- TRANSACTION LOGGING (Visible when active task) -->
+        <div id="transaction-panel" style="display:none; margin-bottom: 10px; background: rgba(0,0,0,0.2); padding: 14px; border-radius: 12px; border: 1px solid var(--border);">
+          <div class="field" style="margin-bottom: 10px;">
+            <label style="font-size: 11px;">No. of Transactions</label>
+            <input type="number" id="input-tx-count" placeholder="e.g. 10" min="0" />
+          </div>
+          <div class="field" style="margin-bottom: 0;">
+            <label style="font-size: 11px;">Transaction Type</label>
+            <input type="text" id="input-tx-type" placeholder="e.g. Emails, Invoices" />
+          </div>
+        </div>
+
         <button class="btn-secondary danger" id="btn-complete" onclick="completeTask()" disabled
           style="width:100%;margin-bottom:10px;">
           ✓ Complete Task
@@ -1440,6 +1452,8 @@
         activeTask = { id: item.id, name, category, startTime: now, status: "Active", itemId: item.id, notes };
         document.getElementById("input-task").value = "";
         document.getElementById("input-notes").value = "";
+        document.getElementById("input-tx-count").value = "";
+        document.getElementById("input-tx-type").value = "";
         updateActiveTaskBar();
         startTaskTimer();
         setTaskButtons(true);
@@ -1490,14 +1504,23 @@
 
     async function completeTask() {
       if (!activeTask) return;
+      
+      const txCount = document.getElementById("input-tx-count").value;
+      const txType = document.getElementById("input-tx-type").value;
+
       const now = new Date();
       const elapsed = Math.round((now - activeTask.startTime) / 60000);
       try {
-        await spPatch(activeTask.itemId, {
+        const patchData = {
           TaskStatus: "Completed",
           TaskEndTime: now.toISOString(),
           DurationMinutes: elapsed,
-        });
+        };
+
+        if (txCount) patchData.NoOfTransactions = parseInt(txCount, 10);
+        if (txType) patchData.TransactionType = txType;
+
+        await spPatch(activeTask.itemId, patchData);
         clearInterval(taskTimerInterval);
         totalProductiveMs += (now - activeTask.startTime);
         updateLogEntry(activeTask.itemId, {
@@ -1750,11 +1773,15 @@
       const btnComplete = document.getElementById("btn-complete");
       const btnPause = document.getElementById("btn-pause");
       const btnResume = document.getElementById("btn-resume");
+      const txPanel = document.getElementById("transaction-panel");
       const isActive = hasTask && activeTask && activeTask.status === "Active";
       const isPaused = hasTask && activeTask && activeTask.status === "Paused";
       btnComplete.disabled = !hasTask;
       btnPause.disabled = !isActive;
       btnResume.disabled = !isPaused;
+      if (txPanel) {
+        txPanel.style.display = hasTask ? "block" : "none";
+      }
     }
 
     function updateActiveTaskBar() {
