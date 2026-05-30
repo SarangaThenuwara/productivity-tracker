@@ -1508,12 +1508,6 @@
       const txCount = document.getElementById("input-tx-count").value.trim();
       const txType = document.getElementById("input-tx-type").value.trim();
 
-      let finalNotes = activeTask.notes || "";
-      if (txCount || txType) {
-        const txInfo = `[Transactions: ${txCount || "0"} x ${txType || "General"}]`;
-        finalNotes = finalNotes ? `${finalNotes} | ${txInfo}` : txInfo;
-      }
-
       const now = new Date();
       const elapsed = Math.round((now - activeTask.startTime) / 60000);
       try {
@@ -1523,15 +1517,18 @@
           DurationMinutes: elapsed,
         };
 
-        if (txCount || txType) {
-          patchData.Notes = finalNotes;
-        }
+        if (txCount) patchData.NoOfTransactions = parseInt(txCount, 10);
+        if (txType) patchData.TransactionType = txType;
 
         await spPatch(activeTask.itemId, patchData);
         clearInterval(taskTimerInterval);
         totalProductiveMs += (now - activeTask.startTime);
         updateLogEntry(activeTask.itemId, {
-          taskStatus: "Completed", taskEndTime: now, durationMinutes: elapsed, notes: finalNotes
+          taskStatus: "Completed",
+          taskEndTime: now,
+          durationMinutes: elapsed,
+          NoOfTransactions: txCount ? parseInt(txCount, 10) : 0,
+          TransactionType: txType || ""
         });
         showToast("✓ Task completed! (" + elapsed + " min)", "success");
         activeTask = null;
@@ -1705,7 +1702,9 @@
               taskStatus: f.TaskStatus,
               OutOfShift: f.OutOfShift,
               IsBreak: f.IsBreak,
-              PingsMissed: f.PingsMissed || 0
+              PingsMissed: f.PingsMissed || 0,
+              NoOfTransactions: f.NoOfTransactions || 0,
+              TransactionType: f.TransactionType || ""
             };
           });
 
@@ -1862,6 +1861,7 @@
             <span>📂 ${t.category}</span>
             <span>⏰ Started: ${startTimeStr}</span>
             ${t.notes ? `<span>📝 ${escapeHtml(t.notes)}</span>` : ""}
+            ${t.NoOfTransactions ? `<span>📊 ${t.NoOfTransactions} ${escapeHtml(t.TransactionType || 'Transactions')}</span>` : ""}
             ${t.OutOfShift ? `<span style="color:var(--red);">⚠️ Out of Shift</span>` : ""}
           </div>
         </div>
